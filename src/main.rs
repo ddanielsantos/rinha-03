@@ -1,3 +1,5 @@
+mod processor;
+
 #[derive(Clone)]
 struct AppState {}
 
@@ -36,7 +38,7 @@ mod payments {
 
     struct ServiceInfo {
         total_requests: u64,
-        total_amout: f64,
+        total_amount: f64,
     }
 
     struct PaymentsSummaryResponseBody {
@@ -54,22 +56,4 @@ mod payments {
             .route("/payments-summary", get(payments_summary_handler))
     }
 
-    mod processors {
-        struct HealthCheckResponseBody {
-            failing: bool,
-            min_response_time: u64,
-        }
-
-        struct PaymentsDetailsResponseBody {
-            correlation_id: String,
-            amount: f64,
-            requested_at: String, // TODO: make it ISO UTC, like 2025-07-15T12:34:56.000Z
-        }
-
-        trait Processor {
-            fn send_payment();
-            fn health_check() -> HealthCheckResponseBody;
-            fn payments_details(id: String) -> PaymentsDetailsResponseBody;
-        }
-    }
 }
