@@ -1,4 +1,4 @@
-mod processor;
+mod processors;
 
 #[derive(Clone)]
 struct AppState {}
