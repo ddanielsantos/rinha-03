@@ -83,3 +83,18 @@ impl Processor for DefaultProcessor {
         "http://default-processor:3000".to_string()
     }
 }
+
+pub async fn health_check_worker() {
+    let processor = DefaultProcessor;
+
+    loop {
+        match processor.health_check().await {
+            HealthCheckResponseBody { failing: false, .. } => {
+                // update circuit breaker state to healthy on redis
+            }
+            HealthCheckResponseBody { failing: true, .. } => {
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
+}

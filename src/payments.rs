@@ -41,7 +41,7 @@ pub fn get_router() -> Router<AppState> {
         .route("/internal/check", get(internal_check_handler))
 }
 
-pub async fn background_processing() {
+pub async fn send_queue_payments_worker() {
     loop {
         println!("Sending queue payments");
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
