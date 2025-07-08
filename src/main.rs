@@ -1,3 +1,6 @@
+use tokio::task;
+use crate::payments::background_processing;
+
 mod payments;
 mod processors;
 
@@ -7,6 +10,7 @@ struct AppState {}
 
 #[tokio::main]
 async fn main() {
+    task::spawn(background_processing());
     let state = AppState {};
 
     let router = payments::get_router().with_state(state);
