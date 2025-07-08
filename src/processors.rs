@@ -1,4 +1,5 @@
-use reqwest::{get, Response};
+use crate::circuit_breaker::CircuitBreaker;
+use reqwest::Response;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -84,13 +85,14 @@ impl Processor for DefaultProcessor {
     }
 }
 
-pub async fn health_check_worker() {
+pub async fn health_check_worker(redis_connection: redis::aio::MultiplexedConnection) {
     let processor = DefaultProcessor;
+    let mut circuit_breaker = CircuitBreaker::init(redis_connection).await;
 
     loop {
         match processor.health_check().await {
             HealthCheckResponseBody { failing: false, .. } => {
-                // update circuit breaker state to healthy on redis
+                circuit_breaker.close().await;
             }
             HealthCheckResponseBody { failing: true, .. } => {
             }

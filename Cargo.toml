@@ -8,5 +8,6 @@ axum = "0.8.4"
 tokio = { version = "1.46.1", features = ["macros", "rt-multi-thread"] }
 reqwest = { version = "0.12.22", features = ["json"] }
 serde = { version = "1.0.219", features = ["derive"] }
-[dependencies.redis]
-git = "https://github.com/redis-rs/redis-rs.git"
+redis = { version = "0.32.3", git = "https://github.com/redis-rs/redis-rs.git", features = ["tokio-comp"] }
+bb8 = "0.9.0"
+bb8-redis = "0.24.0"

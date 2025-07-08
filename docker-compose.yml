@@ -1,5 +1,7 @@
 services:
   instance_01:
+    depends_on:
+      - redis
     build:
       context: .
       dockerfile: Dockerfile
@@ -9,6 +11,8 @@ services:
     environment:
       - SERVER_ID=instance_01
   instance_02:
+    depends_on:
+      - redis
     build:
       context: .
       dockerfile: Dockerfile
