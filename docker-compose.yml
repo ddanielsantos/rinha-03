@@ -1,5 +1,8 @@
 services:
   instance_01:
+    networks:
+      - backend
+      - payment-processor
     depends_on:
       - redis
     build:
@@ -10,7 +13,12 @@ services:
       - "3000"
     environment:
       - SERVER_ID=instance_01
+      - PAYMENT_PROCESSOR_URL_DEFAULT=http://payment-processor-default:8080
+      - PAYMENT_PROCESSOR_URL_FALLBACK=http://payment-processor-fallback:8080
   instance_02:
+    networks:
+      - backend
+      - payment-processor
     depends_on:
       - redis
     build:
@@ -21,6 +29,8 @@ services:
       - "3000"
     environment:
       - SERVER_ID=instance_02
+      - PAYMENT_PROCESSOR_URL_DEFAULT=http://payment-processor-default:8080
+      - PAYMENT_PROCESSOR_URL_FALLBACK=http://payment-processor-fallback:8080
   nginx:
     image: nginx:alpine
     container_name: rinha_nginx
@@ -31,9 +41,20 @@ services:
     depends_on:
       - instance_01
       - instance_02
+    networks:
+      - backend
   redis:
     image: redis:alpine
     container_name: rinha_redis
     ports:
       - "6379:6379"
     restart: unless-stopped
+    networks:
+      - backend
+
+
+networks:
+  backend:
+    driver: bridge
+  payment-processor:
+    external: true

@@ -4,8 +4,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
 struct SendPaymentRequestBody {
+    #[serde(rename = "correlationId")]
     correlation_id: String,
     amount: f64,
+    #[serde(rename = "requestedAt")]
     requested_at: String, // TODO: make it ISO UTC, like 2025-07-15T12:34:56.000Z
 }
 
@@ -15,15 +17,19 @@ struct SendPaymentResponseBody {
 }
 
 #[derive(Deserialize)]
+#[derive(Debug)]
 struct HealthCheckResponseBody {
     failing: bool,
+    #[serde(rename = "minResponseTime")]
     min_response_time: u64,
 }
 
 #[derive(Deserialize)]
 struct PaymentsDetailsResponseBody {
+    #[serde(rename = "correlationId")]
     correlation_id: String,
     amount: f64,
+    #[serde(rename = "requestedAt")]
     requested_at: String, // TODO: make it ISO UTC, like 2025-07-15T12:34:56.000Z
 }
 
@@ -81,7 +87,8 @@ struct DefaultProcessor;
 
 impl Processor for DefaultProcessor {
     fn get_processor_url() -> String {
-        "http://default-processor:3000".to_string()
+        std::env::var("PAYMENT_PROCESSOR_URL_DEFAULT")
+            .unwrap_or_else(|_| "http://payment-processor-default:8080".to_string())
     }
 }
 
@@ -90,7 +97,8 @@ pub async fn health_check_worker(redis_connection: redis::aio::MultiplexedConnec
     let mut circuit_breaker = CircuitBreaker::init(redis_connection).await;
 
     loop {
-        match processor.health_check().await {
+        let body = processor.health_check().await;
+        match body {
             HealthCheckResponseBody { failing: false, .. } => {
                 circuit_breaker.close().await;
             }

@@ -43,7 +43,7 @@ pub fn get_router() -> Router<AppState> {
 
 pub async fn send_queue_payments_worker() {
     loop {
-        println!("Sending queue payments");
+        println!("Sending queue payments"); // TODO: Implement actual payment sending logic
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     }
 }
