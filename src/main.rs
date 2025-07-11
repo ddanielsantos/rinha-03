@@ -10,7 +10,17 @@ struct AppState {}
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    #[cfg(debug_assertions)]
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::TRACE)
+        .finish();
+
+    #[cfg(not(debug_assertions))]
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::ERROR)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://rinha_redis".to_string());
     let client = redis::Client::open(redis_url).expect("Failed to create Redis client");
