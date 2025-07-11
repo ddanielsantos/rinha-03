@@ -11,3 +11,5 @@ serde = { version = "1.0.219", features = ["derive"] }
 redis = { version = "0.32.3", git = "https://github.com/redis-rs/redis-rs.git", features = ["tokio-comp"] }
 bb8 = "0.9.0"
 bb8-redis = "0.24.0"
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3" }
