@@ -5,8 +5,8 @@ use crate::AppState;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PaymentsRequestBody {
-    correlation_id: String,
-    amount: f64,
+    pub correlation_id: String,
+    pub amount: f64,
 }
 
 async fn payments_handler(State(mut state): State<AppState>, Json(body): Json<PaymentsRequestBody>) -> impl IntoResponse {

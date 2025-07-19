@@ -1,8 +1,8 @@
-use redis::RedisResult;
+use redis::RedisError;
 use crate::circuit_breaker::CircuitBreaker;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
-use crate::payments;
+use crate::payments::PaymentsRequestBody;
 
 #[derive(Serialize)]
 struct SendPaymentRequestBody {
@@ -11,6 +11,16 @@ struct SendPaymentRequestBody {
     amount: f64,
     #[serde(rename = "requestedAt")]
     requested_at: String, // TODO: make it ISO UTC, like 2025-07-15T12:34:56.000Z
+}
+
+impl SendPaymentRequestBody {
+    fn from_payments_request_body(body: PaymentsRequestBody) -> Self {
+        Self {
+            correlation_id: body.correlation_id,
+            amount: body.amount,
+            requested_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -121,22 +131,24 @@ pub async fn send_queue_payments_worker(mut redis_connection: redis::aio::Multip
             .await;
         match payment {
             Ok(value) => {
-                let processor = DefaultProcessor;
-                let send_payment_body = SendPaymentRequestBody {
-                    correlation_id: "".to_string(),
-                    amount: 0.0,
-                    requested_at: "".to_string(), // TODO: set this to current time in ISO UTC format
-                };
-
-                processor.send_payment(send_payment_body).await;
+                if let Ok(body) = serde_json::from_str::<PaymentsRequestBody>(value.as_str()) {
+                    let send_body = SendPaymentRequestBody::from_payments_request_body(body);
+                    let processor = DefaultProcessor;
+                    let response = processor.send_payment(send_body).await;
+                    tracing::info!("Payment sent: {}", response.message);
+                } else if let Err(err) = serde_json::from_str::<PaymentsRequestBody>(value.as_str()) {
+                    tracing::error!("Failed to parse payment from queue: {}", err);
+                }
             }
             Err(err) => {
-                tracing::error!("Failed to pop payment from queue: {}", err);
-                continue;
+                if err.kind() == redis::ErrorKind::TypeError {
+                    tracing::info!("No payments in queue, waiting for new payments");
+                } else {
+                    tracing::error!("Failed to pop payment from queue: {}", err);
+                }
             }
         }
-
-
+        
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     }
 }
