@@ -20,7 +20,7 @@ impl CircuitBreaker {
         let mut circuit_breaker = CircuitBreaker { redis_connection };
 
         if !exists {
-            circuit_breaker.save_state_to_redis(State::Closed);
+            circuit_breaker.save_state_to_redis(State::Closed).await;
         }
         circuit_breaker
     }
@@ -56,7 +56,7 @@ impl CircuitBreaker {
             .unwrap();
     }
 
-    async fn open(&mut self) {
+    pub async fn open(&mut self) {
         self.save_state_to_redis(State::Open).await;
     }
 

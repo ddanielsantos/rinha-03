@@ -1033,6 +1033,7 @@ dependencies = [
  "redis 0.32.3 (git+https://github.com/redis-rs/redis-rs.git)",
  "reqwest",
  "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",

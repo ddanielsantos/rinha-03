@@ -6,16 +6,12 @@ mod payments;
 mod processors;
 
 #[derive(Clone)]
-struct AppState {}
+struct AppState {
+    redis_connection: redis::aio::MultiplexedConnection,
+}
 
 #[tokio::main]
 async fn main() {
-    #[cfg(debug_assertions)]
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
-        .finish();
-
-    #[cfg(not(debug_assertions))]
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::ERROR)
         .finish();
@@ -29,10 +25,20 @@ async fn main() {
         .await
         .expect("Failed to create Redis connection");
 
-    task::spawn(payments::send_queue_payments_worker());
-    task::spawn(processors::health_check_worker(con));
+    {
+        let _: () = redis::cmd("PING")
+            .query_async::<()>(&mut con.clone())
+            .await
+            .expect("Failed to ping Redis");
+        tracing::info!("Redis connection established");
+    }
 
-    let state = AppState {};
+    task::spawn(processors::send_queue_payments_worker(con.clone()));
+    task::spawn(processors::health_check_worker(con.clone()));
+
+    let state = AppState {
+        redis_connection: con,
+    };
 
     let router = payments::get_router().with_state(state);
     let address = "0.0.0.0";

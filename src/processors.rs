@@ -1,6 +1,8 @@
+use redis::RedisResult;
 use crate::circuit_breaker::CircuitBreaker;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
+use crate::payments;
 
 #[derive(Serialize)]
 struct SendPaymentRequestBody {
@@ -98,13 +100,43 @@ pub async fn health_check_worker(redis_connection: redis::aio::MultiplexedConnec
 
     loop {
         let body = processor.health_check().await;
-        match body {
-            HealthCheckResponseBody { failing: false, .. } => {
-                circuit_breaker.close().await;
+
+        if !body.failing {
+            circuit_breaker.close().await;
+            tracing::info!("Circuit breaker closed, processor is healthy");
+        } else {
+            circuit_breaker.open().await;
+            tracing::warn!("Circuit breaker opened, processor is unhealthy");
+        }
+
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
+}
+
+pub async fn send_queue_payments_worker(mut redis_connection: redis::aio::MultiplexedConnection) {
+    loop {
+        let payment = redis::cmd("LPOP")
+            .arg("payments_queue")
+            .query_async::<String>(&mut redis_connection)
+            .await;
+        match payment {
+            Ok(value) => {
+                let processor = DefaultProcessor;
+                let send_payment_body = SendPaymentRequestBody {
+                    correlation_id: "".to_string(),
+                    amount: 0.0,
+                    requested_at: "".to_string(), // TODO: set this to current time in ISO UTC format
+                };
+
+                processor.send_payment(send_payment_body).await;
             }
-            HealthCheckResponseBody { failing: true, .. } => {
+            Err(err) => {
+                tracing::error!("Failed to pop payment from queue: {}", err);
+                continue;
             }
         }
+
+
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     }
 }
