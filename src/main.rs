@@ -12,6 +12,12 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
+    #[cfg(debug_assertions)]
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .finish();
+
+    #[cfg(not(debug_assertions))]
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::ERROR)
         .finish();
