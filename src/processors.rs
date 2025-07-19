@@ -1,7 +1,7 @@
-use redis::RedisError;
 use crate::circuit_breaker::CircuitBreaker;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use crate::payments::PaymentsRequestBody;
 
 #[derive(Serialize)]
@@ -10,7 +10,8 @@ struct SendPaymentRequestBody {
     correlation_id: String,
     amount: f64,
     #[serde(rename = "requestedAt")]
-    requested_at: String, // TODO: make it ISO UTC, like 2025-07-15T12:34:56.000Z
+    #[serde(with = "time::serde::rfc3339")]
+    requested_at: OffsetDateTime,
 }
 
 impl SendPaymentRequestBody {
@@ -18,7 +19,7 @@ impl SendPaymentRequestBody {
         Self {
             correlation_id: body.correlation_id,
             amount: body.amount,
-            requested_at: chrono::Utc::now().to_rfc3339(),
+            requested_at: OffsetDateTime::now_utc(),
         }
     }
 }
@@ -42,7 +43,7 @@ struct PaymentsDetailsResponseBody {
     correlation_id: String,
     amount: f64,
     #[serde(rename = "requestedAt")]
-    requested_at: String, // TODO: make it ISO UTC, like 2025-07-15T12:34:56.000Z
+    requested_at: String,
 }
 
 trait Processor {
@@ -148,7 +149,7 @@ pub async fn send_queue_payments_worker(mut redis_connection: redis::aio::Multip
                 }
             }
         }
-        
+
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     }
 }
