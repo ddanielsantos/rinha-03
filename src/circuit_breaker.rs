@@ -1,70 +1,110 @@
+use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
+
+#[derive(Serialize, Deserialize)]
 enum State {
     Closed,
     Open,
     HalfOpen,
 }
 
+
+#[derive(Serialize, Deserialize)]
 pub struct CircuitBreaker {
-    redis_connection: redis::aio::MultiplexedConnection,
+    name: String,
+    state: State,
+    opened_at: Option<OffsetDateTime>,
 }
 
-const CIRCUIT_BREAKER_KEY: &'static str = "circuit_breaker_state";
+impl CircuitBreaker {
+    pub fn new(name: String) -> CircuitBreaker {
+        CircuitBreaker {
+            name,
+            state: State::Closed,
+            opened_at: None,
+        }
+    }
+}
 
 impl CircuitBreaker {
-    pub async fn init(mut redis_connection: redis::aio::MultiplexedConnection) -> Self {
-        let exists = redis::cmd("EXISTS")
-            .query_async::<i32>(&mut redis_connection)
-            .await
-            .unwrap_or(0) > 0;
+    pub fn trip(&mut self) {
+        tracing::info!("Circuit breaker tripped");
+        self.state = State::Open;
+        self.opened_at = Some(OffsetDateTime::now_utc());
+    }
 
-        let mut circuit_breaker = CircuitBreaker { redis_connection };
+    pub fn reset(&mut self) {
+        tracing::info!("Circuit breaker reset");
+        self.state = State::Closed;
+        self.opened_at = None;
+    }
 
-        if !exists {
-            circuit_breaker.save_state_to_redis(State::Closed).await;
+    pub fn on_request_result(&mut self, success: bool) {
+        match self.state {
+            State::Open => {
+                // If the circuit breaker is open, we do not allow requests to proceed.
+            }
+            State::HalfOpen => {
+                if success {
+                    self.reset();
+                } else {
+                    self.trip();
+                }
+            }
+            State::Closed => {
+                if !success {
+                    self.trip();
+                }
+            }
         }
-        circuit_breaker
     }
 
-    async fn get_state_from_redis(&mut self) -> State {
-        // let state: String = self.redis_connection.get(CIRCUIT_BREAKER_KEY).unwrap_or_else(|_| "CLOSED".to_string());
-        let state = redis::cmd("GET")
-            .arg(CIRCUIT_BREAKER_KEY)
-            .query_async::<String>(&mut self.redis_connection)
-            .await
-            .unwrap_or_else(|_| "CLOSED".to_string());
-
-        match state.as_str() {
-            "OPEN" => State::Open,
-            "HALF_OPEN" => State::HalfOpen,
-            _ => State::Closed,
+    pub fn is_request_allowed(&self) -> bool {
+        match self.state {
+            State::Open => false,
+            State::HalfOpen | State::Closed => true,
         }
     }
+}
 
-    async fn save_state_to_redis(&mut self, state: State) {
-        let value = match state {
-            State::Open => "OPEN",
-            State::HalfOpen => "HALF_OPEN",
-            State::Closed => "CLOSED",
-        };
-        // let _: () = self.redis_connection.set(CIRCUIT_BREAKER_KEY, value).unwrap();
-        
-        let _: () = redis::cmd("SET")
-            .arg(CIRCUIT_BREAKER_KEY)
-            .arg(value)
-            .query_async::<()>(&mut self.redis_connection)
-            .await
-            .unwrap();
+pub async fn load_state_from_redis(processor_name: &String, redis_con: &mut redis::aio::MultiplexedConnection) -> CircuitBreaker {
+    let key = format!("circuit_breaker:{}", processor_name);
+    match redis::cmd("GET")
+        .arg(&key)
+        .query_async::<String>(redis_con)
+        .await
+    {
+        Ok(value) => {
+            serde_json::from_str(&value).unwrap_or_else(|_| CircuitBreaker::new(processor_name.clone()))
+        }
+        Err(_) => CircuitBreaker::new(processor_name.clone()),
     }
+}
 
-    pub async fn open(&mut self) {
-        self.save_state_to_redis(State::Open).await;
-    }
+pub async fn save_state_to_redis(cb: CircuitBreaker, redis_con: &mut redis::aio::MultiplexedConnection) {
+    let key = format!("circuit_breaker:{}", cb.name);
+    let value = serde_json::to_string(&cb).expect("Failed to serialize CircuitBreaker");
 
-    pub async fn close(&mut self) {
-        self.save_state_to_redis(State::Closed).await;
-    }
+    redis::cmd("SET")
+        .arg(key)
+        .arg(value)
+        .query_async::<()>(redis_con)
+        .await
+        .expect("Failed to save CircuitBreaker state to Redis");
+}
 
-    async fn half_open(&mut self) {
-        self.save_state_to_redis(State::HalfOpen).await;
+mod tests {
+    use crate::circuit_breaker::CircuitBreaker;
+
+    #[tokio::test]
+    async fn test_circuit_breaker() {
+        let mut cb = CircuitBreaker::new("test_processor".to_string());
+
+        assert!(cb.is_request_allowed());
+        cb.trip();
+        assert!(!cb.is_request_allowed());
+
+        cb.on_request_result(true);
+        // assert!(cb.is_request_allowed());
     }
 }

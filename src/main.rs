@@ -39,8 +39,14 @@ async fn main() {
         tracing::info!("Redis connection established");
     }
 
-    task::spawn(processors::send_queue_payments_worker(con.clone()));
-    task::spawn(processors::health_check_worker(con.clone()));
+    let queue_con = con.clone();
+    task::spawn(async move { processors::send_queue_payments_worker(queue_con).await });
+
+    let default_health_con = con.clone();
+    task::spawn(async move { processors::health_check_worker("default".to_string(), default_health_con).await });
+
+    let fallback_health_con = con.clone();
+    task::spawn(async move { processors::health_check_worker("fallback".to_string(), fallback_health_con).await });
 
     let state = AppState {
         redis_connection: con,
